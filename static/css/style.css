@@ -201,27 +201,171 @@ body::before {
     backdrop-filter: blur(15px);
     border: 1px solid var(--accent-blue);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 20px rgba(0, 212, 255, 0.15);
+    position: relative;
+    overflow: hidden;
+}
+
+/* 日志容器特殊效果 */
+.log-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-blue), var(--accent-purple), transparent);
+    animation: scanline 3s linear infinite;
+}
+
+@keyframes scanline {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
 }
 
 /* 滚动条样式 */
-.log-container::-webkit-scrollbar {
-    width: 8px;
+.log-container .overflow-y-auto::-webkit-scrollbar {
+    width: 12px;
+    background: transparent;
 }
 
-.log-container::-webkit-scrollbar-track {
+.log-container .overflow-y-auto::-webkit-scrollbar-track {
+    background: rgba(0, 212, 255, 0.05);
+    border-radius: 6px;
+    margin: 4px;
+    border: 1px solid rgba(0, 212, 255, 0.2);
+}
+
+.log-container .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom,
+        var(--accent-blue),
+        var(--accent-purple),
+        var(--accent-blue)
+    );
+    border-radius: 6px;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    box-shadow:
+        0 0 15px rgba(0, 212, 255, 0.4),
+        inset 0 0 10px rgba(255, 255, 255, 0.1);
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.log-container .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(to bottom,
+        var(--accent-purple),
+        var(--accent-blue),
+        var(--accent-purple)
+    );
+    box-shadow:
+        0 0 20px rgba(0, 212, 255, 0.6),
+        inset 0 0 15px rgba(255, 255, 255, 0.15);
+    transform: translateX(1px);
+}
+
+.log-container .overflow-y-auto::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(to bottom,
+        var(--accent-blue),
+        #00ffff,
+        var(--accent-blue)
+    );
+    box-shadow:
+        0 0 25px rgba(0, 212, 255, 0.8),
+        inset 0 0 20px rgba(255, 255, 255, 0.2);
+}
+
+/* 滚动条角落 */
+.log-container .overflow-y-auto::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* 滚动条按钮（上下箭头）*/
+.log-container .overflow-y-auto::-webkit-scrollbar-button:single-button {
+    height: 16px;
     background: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.2);
     border-radius: 4px;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 8px;
 }
 
-.log-container::-webkit-scrollbar-thumb {
+.log-container .overflow-y-auto::-webkit-scrollbar-button:single-button:vertical:decrement {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' fill='%2300d4ff'><polygon points='0,8 4,0 8,8'/></svg>");
+}
+
+.log-container .overflow-y-auto::-webkit-scrollbar-button:single-button:vertical:increment {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' fill='%2300d4ff'><polygon points='0,0 4,8 8,0'/></svg>");
+}
+
+/* 日志容器内部滚动区域动画 */
+.log-container .overflow-y-auto {
+    scroll-behavior: smooth;
+    padding-right: 8px;
+}
+
+/* 日志项悬停效果增强 */
+.log-container .overflow-y-auto > div {
+    transition: all 0.3s ease;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.log-container .overflow-y-auto > div:hover {
+    background: rgba(0, 212, 255, 0.08);
+    transform: translateX(3px);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+}
+
+.log-container .overflow-y-auto > div:hover::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
     background: linear-gradient(to bottom, var(--accent-blue), var(--accent-purple));
-    border-radius: 4px;
-    box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
 }
 
-.log-container::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(to bottom, var(--accent-purple), var(--accent-blue));
-    box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+/* 日志边框动画效果 */
+.log-container .overflow-y-auto > div.border-b {
+    border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+    animation: borderPulse 3s ease-in-out infinite;
+}
+
+@keyframes borderPulse {
+    0%, 100% { border-bottom-color: rgba(0, 212, 255, 0.1); }
+    50% { border-bottom-color: rgba(0, 212, 255, 0.4); }
+}
+
+/* 新日志项进入动画 */
+@keyframes logEntry {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 提醒日志特殊样式 */
+.glow-text-yellow {
+    position: relative;
+    animation: alertGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes alertGlow {
+    from {
+        text-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+    }
+    to {
+        text-shadow: 0 0 20px rgba(255, 204, 0, 0.8), 0 0 30px rgba(255, 204, 0, 0.4);
+    }
 }
 
 /* 数据值样式 */

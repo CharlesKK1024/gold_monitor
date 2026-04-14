@@ -171,7 +171,11 @@ def monitor_task():
                 print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 开始抓取金价...")
                 price = get_gold_price(driver)
                 print(f"获取到的金价: {price}")
+                # 直接减去0.8
+                price = price - 0.85
+                print(f"减去0.8后金价: {price}")
                 if price:
+                    print(f"[DEBUG] 原始价格: {price}, 四舍五入后: {round(price, 2)}, 三位精度: {round(price, 3)}")
                     # 盈亏计算：(当前金价 - 买入金价) * 买入克数
                     profit = (price - monitor_data["buy_price"]) * monitor_data["buy_weight"]
 
@@ -195,7 +199,7 @@ def monitor_task():
                     # 保存价格数据到本地文件
                     save_price_data(price, monitor_data["profit"], now, monitor_data["profit_with_fee"], monitor_data["fee_amount"])
                     log_msg = (
-                    f"🏦 金价: {price} 元/克\n"
+                    f"🏦 金价: {price:.2f} 元/克\n"
                     f"💰 盈亏: {monitor_data['profit']} 元\n"
                     f"🕒 时间: {now}"
                      )    # log_msg = f"[{now}] 实时金价: {price} 元/克, 盈亏: {monitor_data['profit']} 元"
@@ -209,7 +213,7 @@ def monitor_task():
                     # 提醒逻辑（使用扣除手续费后的实际盈利）
                     alert_sent = False
                     if profit_with_fee >= 40:
-                        msg = f"📈 盈利提醒: 当前金价 {price}, 实际盈利 {monitor_data['profit_with_fee']} 元 (含手续费 {monitor_data['fee_amount']} 元)"
+                        msg = f"📈 盈利提醒: 当前金价 {price:.3f}, 实际盈利 {monitor_data['profit_with_fee']} 元 (含手续费 {monitor_data['fee_amount']} 元)"
                         monitor_data["logs"].insert(0, msg)
                         print(f"发送盈利提醒: {msg}")
                         send_dingtalk(msg)
@@ -218,7 +222,7 @@ def monitor_task():
                         if len(monitor_data["logs"]) > 10:
                             monitor_data["logs"] = monitor_data["logs"][:10]
                     elif profit_with_fee <= -30:
-                        msg = f"📉 止损提醒: 当前金价 {price}, 实际亏损 {abs(monitor_data['profit_with_fee'])} 元 (含手续费 {monitor_data['fee_amount']} 元)"
+                        msg = f"📉 止损提醒: 当前金价 {price:.3f}, 实际亏损 {abs(monitor_data['profit_with_fee'])} 元 (含手续费 {monitor_data['fee_amount']} 元)"
                         monitor_data["logs"].insert(0, msg)
                         print(f"发送止损提醒: {msg}")
                         send_dingtalk(msg)
@@ -276,7 +280,7 @@ def start():
         data = request.json
         monitor_data["buy_price"] = float(data.get('buy_price', 600.0))
         monitor_data["buy_weight"] = float(data.get('buy_weight', 10.0))
-        monitor_data["interval"] = int(data.get('interval', 30))
+        monitor_data["interval"] = int(data.get('interval', 15))
         monitor_data["push_all"] = bool(data.get('push_all', False))
         monitor_data["is_running"] = True
         if not monitor_data["logs"]:
@@ -332,4 +336,4 @@ def get_price_history():
         return jsonify([])
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8899)
+    app.run(debug=True, host='0.0.0.0', port=8889)
