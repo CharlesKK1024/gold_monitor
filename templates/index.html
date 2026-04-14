@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黄金价格实时监控 - Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body { background-color: #0f172a; }
+        .card-dark { background-color: #1e293b; border: 1px solid #334155; }
+        .input-dark { background-color: #0f172a; border: 1px solid #334155; color: #f1f5f9; }
+        .input-dark:focus { border-color: #38bdf8; outline: none; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); }
+        .profit-positive { color: #4ade80; }
+        .profit-negative { color: #f87171; }
+        .log-container::-webkit-scrollbar { width: 4px; }
+        .log-container::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 text-slate-200">
+    <div id="app" class="card-dark rounded-3xl shadow-2xl p-8 w-full max-w-lg">
+        <div class="flex items-center justify-center space-x-3 mb-8">
+            <div class="bg-yellow-500 p-2 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-white">黄金价格监控 Pro</h1>
+        </div>
+        
+        <!-- 配置区域 -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="col-span-1">
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">买入金价 (元/克)</label>
+                <input v-model="buy_price" type="number" step="0.1" class="w-full px-4 py-2.5 input-dark rounded-xl text-sm">
+            </div>
+            <div class="col-span-1">
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">买入克数 (克)</label>
+                <input v-model="buy_weight" type="number" step="0.001" class="w-full px-4 py-2.5 input-dark rounded-xl text-sm">
+            </div>
+            <div class="col-span-2">
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex justify-between">
+                    <span>钉钉 Webhook (URL 或 Token)</span>
+                    <button @click="testDingtalk" class="text-sky-400 hover:text-sky-300 transition-colors">测试通知</button>
+                </label>
+                <input v-model="dingtalk_token" type="password" placeholder="填写钉钉机器人 AccessToken 或 完整 Webhook URL" class="w-full px-4 py-2.5 input-dark rounded-xl text-sm">
+            </div>
+            <div class="col-span-2">
+                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">监控频率 (秒)</label>
+                <div class="flex space-x-2">
+                    <input v-model="interval" type="number" class="flex-1 px-4 py-2.5 input-dark rounded-xl text-sm">
+                    <button v-if="is_running" @click="updateInterval" class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 transition-all text-sm font-bold">更新</button>
+                </div>
+            </div>
+            
+            <div class="col-span-2 flex items-center space-x-2">
+                <input v-model="push_all" type="checkbox" id="push_all" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-sky-500 focus:ring-sky-500">
+                <label for="push_all" class="text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer">推送每一次价格更新到钉钉</label>
+            </div>
+            
+            <button @click="toggleMonitor" 
+                :class="is_running ? 'bg-rose-500 hover:bg-rose-600' : 'bg-sky-500 hover:bg-sky-600'"
+                class="col-span-2 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-sky-900/20 active:scale-[0.98]">
+                <span v-text="is_running ? '停止监控任务' : '开启实时监控'"></span>
+            </button>
+        </div>
+
+        <!-- 状态显示 -->
+        <div v-if="is_running" class="grid grid-cols-2 gap-4 border-t border-slate-700 pt-6 mb-6">
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                <span class="block text-xs text-slate-500 mb-1">当前金价</span>
+                <span class="text-xl font-black text-white"><span v-text="gold_price"></span> <small class="text-xs font-normal text-slate-400">元/克</small></span>
+            </div>
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                <span class="block text-xs text-slate-500 mb-1">当前盈亏</span>
+                <span :class="profit >= 0 ? 'profit-positive' : 'profit-negative'" class="text-xl font-black">
+                    <span v-text="profit"></span> <small class="text-xs font-normal text-slate-400">元</small>
+                </span>
+            </div>
+            <div class="col-span-2 flex justify-end text-[10px] text-slate-500">
+                <span>最后同步于: <span v-text="last_update"></span></span>
+            </div>
+        </div>
+
+        <!-- 日志 -->
+        <div>
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center">
+                <span class="mr-2">监控日志</span>
+                <span class="flex h-2 w-2 rounded-full bg-sky-500 animate-pulse" v-if="is_running"></span>
+            </h3>
+            <div class="log-container bg-slate-900/50 rounded-2xl p-4 h-44 overflow-y-auto text-[11px] font-mono text-slate-400 space-y-2 border border-slate-800">
+                <div v-for="(log, index) in logs" :key="index" class="flex border-b border-slate-800/50 pb-1 last:border-0">
+                    <span v-text="log" :class="log.includes('提醒') ? 'text-yellow-500' : ''"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const buy_price = ref(1043.0);
+                const buy_weight = ref(20.0);
+                const interval = ref(20);
+                const dingtalk_token = ref('https://oapi.dingtalk.com/robot/send?access_token=bd2869ab474d047c4ef11bae1a7153580f542e716a7ae88da75a07fc1cfe3dd4');
+                const push_all = ref(false);
+                
+                const gold_price = ref(0.0);
+                const profit = ref(0.0);
+                const last_update = ref('尚未开始');
+                const is_running = ref(false);
+                const logs = ref([]);
+
+                const fetchStatus = async () => {
+                    try {
+                        const res = await fetch('/status');
+                        const data = await res.json();
+                        gold_price.value = data.gold_price;
+                        profit.value = data.profit;
+                        last_update.value = data.last_update;
+                        is_running.value = data.is_running;
+                        logs.value = data.logs;
+                    } catch (e) {
+                        console.error("获取状态失败", e);
+                    }
+                };
+
+                const toggleMonitor = async () => {
+                    if (is_running.value) {
+                        await fetch('/stop', { method: 'POST' });
+                    } else {
+                        await fetch('/start', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                buy_price: buy_price.value,
+                                buy_weight: buy_weight.value,
+                                interval: interval.value,
+                                dingtalk_token: dingtalk_token.value,
+                                push_all: push_all.value
+                            })
+                        });
+                    }
+                    await fetchStatus();
+                };
+
+                const updateInterval = async () => {
+                    await fetch('/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ interval: interval.value })
+                    });
+                    await fetchStatus();
+                };
+
+                const testDingtalk = async () => {
+                    if (!dingtalk_token.value) {
+                        alert('请先填写钉钉 Webhook Token 或 URL');
+                        return;
+                    }
+                    try {
+                        const res = await fetch('/test_dingtalk', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ dingtalk_token: dingtalk_token.value })
+                        });
+                        const data = await res.json();
+                        if (data.errcode === 0) {
+                            alert('测试通知已发送，请检查钉钉群！');
+                        } else {
+                            alert('发送失败: ' + (data.errmsg || '未知错误'));
+                        }
+                    } catch (e) {
+                        alert('网络错误，请检查后端服务是否运行');
+                    }
+                };
+
+                onMounted(() => {
+                    fetchStatus();
+                    setInterval(fetchStatus, 3000);
+                });
+
+                return {
+                    buy_price, buy_weight, interval, dingtalk_token, push_all,
+                    gold_price, profit, last_update, is_running, logs,
+                    toggleMonitor, updateInterval, testDingtalk
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
