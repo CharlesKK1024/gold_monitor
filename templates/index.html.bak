@@ -15,9 +15,15 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 
+    <script src="/modules/vue.global.js"></script>
+
+
+</head>
+
 <body class="min-h-screen p-4">
 
     <div id="app" class="max-w-7xl mx-auto">
+
         <!-- 标题 -->
 
         <div class="text-center mb-6">
@@ -260,13 +266,13 @@
 
                     return {
 
-                        buy_price: 1042.91,
+                        buy_price: 1043.0,
 
-                        buy_weight: 8.5259,
+                        buy_weight: 20.0,
 
                         interval: 20,
 
-                        push_all: true
+                        push_all: false
 
                     };
 
@@ -580,3 +586,4 @@
 
 </body>
 
+</html>
