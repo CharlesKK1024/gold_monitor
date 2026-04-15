@@ -172,8 +172,8 @@ def monitor_task():
                 price = get_gold_price(driver)
                 print(f"获取到的金价: {price}")
                 # 直接减去0.8
-                price = price - 0.85
-                print(f"减去0.8后金价: {price}")
+                # price = price - 0.85
+                # print(f"减去0.8后金价: {price}")
                 if price:
                     print(f"[DEBUG] 原始价格: {price}, 四舍五入后: {round(price, 2)}, 三位精度: {round(price, 3)}")
                     # 盈亏计算：(当前金价 - 买入金价) * 买入克数
@@ -202,8 +202,7 @@ def monitor_task():
                     f"🏦 金价: {price:.2f} 元/克\n"
                     f"💰 盈亏: {monitor_data['profit']} 元\n"
                     f"🕒 时间: {now}"
-                     )    # log_msg = f"[{now}] 实时金价: {price} 元/克, 盈亏: {monitor_data['profit']} 元"
-                    
+                     )  
                     print(f"准备更新日志: {log_msg}")
                     print(f"更新前日志数量: {len(monitor_data['logs'])}")
                     monitor_data["logs"].insert(0, log_msg)
