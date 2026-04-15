@@ -145,6 +145,120 @@ def get_gold_price(driver):
         traceback.print_exc()
     return None
 
+def get_smart_interval():
+    """智能获取监听间隔：凌晨2-9点使用30分钟，其他时间使用用户设置"""
+    current_hour = datetime.datetime.now().hour
+    user_interval = int(monitor_data["interval"])
+
+    if 2 <= current_hour < 9:
+        print(f"🕒 当前时间 {current_hour:02d}:00，处于夜间模式(02:00-09:00)，使用30分钟监听间隔")
+        return 30 * 60  # 30分钟 = 1800秒
+
+    # 非夜间模式
+    mode_text = "夜间模式结束，恢复正常" if current_hour == 9 else "正常"
+    emoji = "🌅" if current_hour == 9 else "☀️"
+    print(f"{emoji} 当前时间 {current_hour:02d}:00，{mode_text}监听间隔 {user_interval} 秒")
+    return user_interval
+
+
+def handle_monitor_exception(err_msg):
+    """处理监控过程中的异常"""
+    print(err_msg)
+    monitor_data["logs"].insert(0, err_msg)
+    # 保持日志数量在合理范围
+    if len(monitor_data["logs"]) > 10:
+        monitor_data["logs"] = monitor_data["logs"][:10]
+
+
+def add_log_entry(log_msg):
+    """添加日志条目并维护日志数量"""
+    print(f"准备更新日志: {log_msg}")
+    print(f"更新前日志数量: {len(monitor_data['logs'])}")
+    monitor_data["logs"].insert(0, log_msg)
+    print(f"更新后日志数量: {len(monitor_data['logs'])}")
+    print(f"当前日志内容: {monitor_data['logs']}")
+
+    # 保持日志数量在合理范围
+    if len(monitor_data["logs"]) > 10:
+        monitor_data["logs"] = monitor_data["logs"][:10]
+
+
+def process_price_update(price):
+    """处理价格更新和计算盈亏"""
+    print(f"[DEBUG] 原始价格: {price}, 四舍五入后: {round(price, 2)}, 三位精度: {round(price, 3)}")
+
+    # 盈亏计算：(当前金价 - 买入金价) * 买入克数
+    profit = (price - monitor_data["buy_price"]) * monitor_data["buy_weight"]
+
+    # 手续费计算（只有卖出手续费）
+    current_value = price * monitor_data["buy_weight"]
+    sell_fee = current_value * TRANSACTION_FEE_RATE
+    profit_with_fee = profit - sell_fee
+
+    now = datetime.datetime.now().strftime("%H:%M:%S")
+
+    # 更新监控数据
+    monitor_data["gold_price"] = price
+    monitor_data["profit"] = round(profit, 2)
+    monitor_data["profit_with_fee"] = round(profit_with_fee, 2)
+    monitor_data["fee_amount"] = round(sell_fee, 2)
+    monitor_data["last_update"] = now
+
+    # 保存价格数据到本地文件
+    save_price_data(price, monitor_data["profit"], now, monitor_data["profit_with_fee"], monitor_data["fee_amount"])
+
+    # 添加日志
+    log_msg = f"🏦 金价: {price:.2f} 元/克\n💰 盈亏: {monitor_data['profit']} 元\n🕒 时间: {now}"
+    add_log_entry(log_msg)
+
+    # 处理提醒逻辑
+    handle_price_alerts(price, profit_with_fee, log_msg)
+
+
+def handle_price_alerts(price, profit_with_fee, log_msg):
+    """处理价格提醒逻辑"""
+    alert_sent = check_and_send_alerts(price, profit_with_fee)
+
+    # 如果开启了全部推送且没有发送特殊提醒，则推送常规更新
+    if monitor_data["push_all"] and not alert_sent:
+        send_dingtalk(log_msg)
+
+
+def check_and_send_alerts(price, profit_with_fee):
+    """检查并发送提醒"""
+    if profit_with_fee >= 40:
+        send_profit_alert(price)
+        return True
+    elif profit_with_fee <= -30:
+        send_loss_alert(price)
+        return True
+    return False
+
+
+def send_profit_alert(price):
+    """发送盈利提醒"""
+    msg = f"📈 盈利提醒: 当前金价 {price:.3f}, 实际盈利 {monitor_data['profit_with_fee']} 元 (含手续费 {monitor_data['fee_amount']} 元)"
+    monitor_data["logs"].insert(0, msg)
+    print(f"发送盈利提醒: {msg}")
+    send_dingtalk(msg)
+    maintain_log_size()
+
+
+def send_loss_alert(price):
+    """发送止损提醒"""
+    msg = f"📉 止损提醒: 当前金价 {price:.3f}, 实际亏损 {abs(monitor_data['profit_with_fee'])} 元 (含手续费 {monitor_data['fee_amount']} 元)"
+    monitor_data["logs"].insert(0, msg)
+    print(f"发送止损提醒: {msg}")
+    send_dingtalk(msg)
+    maintain_log_size()
+
+
+def maintain_log_size():
+    """维护日志大小"""
+    if len(monitor_data["logs"]) > 10:
+        monitor_data["logs"] = monitor_data["logs"][:10]
+
+
 def monitor_task():
     global monitor_data
 
@@ -175,82 +289,16 @@ def monitor_task():
                 # price = price - 0.85
                 # print(f"减去0.8后金价: {price}")
                 if price:
-                    print(f"[DEBUG] 原始价格: {price}, 四舍五入后: {round(price, 2)}, 三位精度: {round(price, 3)}")
-                    # 盈亏计算：(当前金价 - 买入金价) * 买入克数
-                    profit = (price - monitor_data["buy_price"]) * monitor_data["buy_weight"]
-
-                    # 手续费计算（只有卖出手续费）
-                    current_value = price * monitor_data["buy_weight"]  # 当前总价值
-
-                    # 卖出手续费 = 卖出克数 * 实时金价 * 0.4%
-                    sell_fee = current_value * TRANSACTION_FEE_RATE
-
-                    # 扣除手续费后的实际盈利
-                    profit_with_fee = profit - sell_fee
-
-                    now = datetime.datetime.now().strftime("%H:%M:%S")
-
-                    monitor_data["gold_price"] = price
-                    monitor_data["profit"] = round(profit, 2)
-                    monitor_data["profit_with_fee"] = round(profit_with_fee, 2)
-                    monitor_data["fee_amount"] = round(sell_fee, 2)
-                    monitor_data["last_update"] = now
-
-                    # 保存价格数据到本地文件
-                    save_price_data(price, monitor_data["profit"], now, monitor_data["profit_with_fee"], monitor_data["fee_amount"])
-                    log_msg = (
-                    f"🏦 金价: {price:.2f} 元/克\n"
-                    f"💰 盈亏: {monitor_data['profit']} 元\n"
-                    f"🕒 时间: {now}"
-                     )  
-                    print(f"准备更新日志: {log_msg}")
-                    print(f"更新前日志数量: {len(monitor_data['logs'])}")
-                    monitor_data["logs"].insert(0, log_msg)
-                    print(f"更新后日志数量: {len(monitor_data['logs'])}")
-                    print(f"当前日志内容: {monitor_data['logs']}")  
-                    
-                    # 提醒逻辑（使用扣除手续费后的实际盈利）
-                    alert_sent = False
-                    if profit_with_fee >= 40:
-                        msg = f"📈 盈利提醒: 当前金价 {price:.3f}, 实际盈利 {monitor_data['profit_with_fee']} 元 (含手续费 {monitor_data['fee_amount']} 元)"
-                        monitor_data["logs"].insert(0, msg)
-                        print(f"发送盈利提醒: {msg}")
-                        send_dingtalk(msg)
-                        alert_sent = True
-                        # 保持日志数量在合理范围
-                        if len(monitor_data["logs"]) > 10:
-                            monitor_data["logs"] = monitor_data["logs"][:10]
-                    elif profit_with_fee <= -30:
-                        msg = f"📉 止损提醒: 当前金价 {price:.3f}, 实际亏损 {abs(monitor_data['profit_with_fee'])} 元 (含手续费 {monitor_data['fee_amount']} 元)"
-                        monitor_data["logs"].insert(0, msg)
-                        print(f"发送止损提醒: {msg}")
-                        send_dingtalk(msg)
-                        alert_sent = True
-                        # 保持日志数量在合理范围
-                        if len(monitor_data["logs"]) > 10:
-                            monitor_data["logs"] = monitor_data["logs"][:10]
-
-                    # 如果开启了全部推送且没有发送特殊提醒，则推送常规更新
-                    if monitor_data["push_all"] and not alert_sent:
-                        send_dingtalk(log_msg)
+                    process_price_update(price)
                 else:
                     msg = f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 未能获取到金价"
-                    print(msg)
-                    monitor_data["logs"].insert(0, msg)
-                    # 保持日志数量在合理范围
-                    if len(monitor_data["logs"]) > 10:
-                        monitor_data["logs"] = monitor_data["logs"][:10]
+                    handle_monitor_exception(msg)
             except Exception as e:
                 err_msg = f"抓取异常: {str(e)}"
-                print(err_msg)
-                monitor_data["logs"].insert(0, err_msg)
-                # 保持日志数量在合理范围
-                if len(monitor_data["logs"]) > 10:
-                    monitor_data["logs"] = monitor_data["logs"][:10]
+                handle_monitor_exception(err_msg)
             
-            # 等待设定的时间
-            wait_time = int(monitor_data["interval"])
-            print(f"等待 {wait_time} 秒后进行下一次抓取...")
+            # 获取智能监听间隔
+            wait_time = get_smart_interval()
             for i in range(wait_time):
                 if not monitor_data["is_running"]:
                     print("监控已停止，退出等待循环")
